@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_animations/flutter_map_animations.dart';
@@ -5,7 +6,6 @@ import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_ti
 import 'package:flutter_map_marker_popup/flutter_map_marker_popup.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:locations_history_browser/models/location.dart';
 
 import '../models/location_visit.dart';
@@ -38,6 +38,10 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
   final carouselWidth = 600.0;
 
   late final Map<Location, List<LocationVisit>> _locationsMap = {};
+
+  late final currentSelectedLocationProvider = StateNotifierProvider<CurrentSelectedLocationNotifier, LocationVisit>((ref) {
+    return CurrentSelectedLocationNotifier(widget.locationVisits.last);
+  });
 
   @override
   void initState() {
@@ -90,7 +94,7 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
       // Update the selected location if it's different from the current one
       final currentSelectedLocation = ref.read(currentSelectedLocationProvider);
       if (itemIndex < widget.locationVisits.length && widget.locationVisits[itemIndex] != currentSelectedLocation) {
-        ref.read(currentSelectedLocationProvider.notifier).selectLocation(widget.locationVisits[itemIndex]);
+        ref.read(currentSelectedLocationProvider.notifier).selectLocationVisit(widget.locationVisits[itemIndex]);
       }
     }
   }
@@ -142,9 +146,6 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
 
   @override
   Widget build(BuildContext context) {
-    final locationsVisitBackgroundColor = widget.style?.locationVisitBackgroundColor ?? Colors.teal;
-    final selectedLocationBackgroundColor = widget.style?.selectedLocationBackgroundColor ?? Colors.blue;
-
     // Get the theme mode for the map styling
     // var themeMode = ref.watch(settingsProvider).themeMode;
     // if (themeMode == ThemeMode.system) {
@@ -160,7 +161,7 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
               onTap: () {
                 // Update selected location to last visit for this location
                 final lastVisit = e.value.last;
-                ref.read(currentSelectedLocationProvider.notifier).selectLocation(lastVisit);
+                ref.read(currentSelectedLocationProvider.notifier).selectLocationVisit(lastVisit);
                 // Animate carousel to show the selected location
                 animateCarouselTo(lastVisit);
               },
@@ -228,44 +229,112 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
         SizedBox(
           width: carouselWidth,
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: 100),
+            constraints: BoxConstraints(maxHeight: 150),
             child: CarouselView(
               itemExtent: tileOffest,
               controller: carouselController,
-              onTap: (value) {
-                ref.read(currentSelectedLocationProvider.notifier).selectLocation(widget.locationVisits[value]);
-              },
-              children: widget.locationVisits.map((visit) {
-                return ColoredBox(
-                  color: visit == selectedLocation ? selectedLocationBackgroundColor : locationsVisitBackgroundColor,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              '${visit.location.city}, ${visit.location.country}',
-                              maxLines: 1,
-                              textAlign: TextAlign.center,
-                              overflow: TextOverflow.fade,
-                            ),
-                          ),
-                          Flexible(
-                            child: Text(
-                              '${dateFormat.format(visit.start)} - ${visit.end != null ? dateFormat.format(visit.end!) : "Present"}',
-                              textAlign: TextAlign.center,
-                              overflow: TextOverflow.fade,
-                              maxLines: 1,
-                            ),
-                          ),
-                        ],
-                      ),
+              onTap: null,
+              enableSplash: false,
+              shape: Border(),
+              children: widget.locationVisits.mapIndexed((index, visit) {
+                String? yearHeader;
+                if (index == 0 || (visit.end != null && visit.end!.year > widget.locationVisits[index - 1].end!.year)) {
+                  yearHeader = visit.end!.year.toString();
+                }
+                return carouselBox(visit, visit == selectedLocation, yearHeader, dateFormat);
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget carouselBox(
+    LocationVisit visit,
+    bool selected,
+    String? yearHeader,
+    DateFormat dateFormat,
+  ) {
+    final locationsVisitBackgroundColor = widget.style?.locationVisitBackgroundColor ?? Colors.teal;
+    final selectedLocationBackgroundColor = widget.style?.selectedLocationBackgroundColor ?? Colors.blue;
+
+    final WidgetStateProperty<Color?> effectiveOverlayColor = WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+      if (states.contains(WidgetState.pressed)) {
+        return Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1);
+      }
+      if (states.contains(WidgetState.hovered)) {
+        return Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08);
+      }
+      if (states.contains(WidgetState.focused)) {
+        return Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1);
+      }
+      return null;
+    });
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 50,
+          child: yearHeader == null
+              ? const SizedBox.shrink()
+              : Center(
+                  child: Flexible(
+                    child: Text(
+                      yearHeader,
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.fade,
+                      maxLines: 1,
                     ),
                   ),
-                );
-              }).toList(),
+                ),
+        ),
+        Expanded(
+          child: Material(
+            clipBehavior: Clip.antiAlias,
+            color: selected ? selectedLocationBackgroundColor : locationsVisitBackgroundColor,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28.0),
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            '${visit.location.city}, ${visit.location.country}',
+                            maxLines: 1,
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.fade,
+                          ),
+                        ),
+                        Flexible(
+                          child: Text(
+                            '${dateFormat.format(visit.start)} - ${visit.end != null ? dateFormat.format(visit.end!) : "Present"}',
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.fade,
+                            maxLines: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      ref.read(currentSelectedLocationProvider.notifier).selectLocationVisit(visit);
+                    },
+                    overlayColor: effectiveOverlayColor,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
