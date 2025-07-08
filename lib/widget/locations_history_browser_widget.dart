@@ -1,12 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../constants/simons_visits.dart';
 import '../models/location_visit.dart';
@@ -15,10 +12,12 @@ import '../style/locations_history_browser_style.dart';
 
 class LocationsHistoryBrowser extends ConsumerStatefulWidget {
   final LocationsHistoryBrowserStyle? style;
+  final String mapsUrlTemplate;
 
   const LocationsHistoryBrowser({
     super.key,
     this.style,
+    required this.mapsUrlTemplate,
   });
 
   @override
@@ -39,8 +38,6 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
     darkMapStyle = FutureProvider((ref) async {
       return await DefaultAssetBundle.of(context).loadString('assets/maps_dark_theme.json');
     });
-
-    //carouselController.jumpTo(simonsVisits.length - 1);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       carouselController.animateTo(carouselController.position.maxScrollExtent, duration: Durations.long1, curve: Curves.easeInOut).then((_) {
@@ -104,7 +101,7 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
     //   themeMode = MediaQuery.of(context).platformBrightness == Brightness.dark ? ThemeMode.dark : ThemeMode.light;
     // }
 
-    // // watch for changes in the current location
+    // watch for changes in the current location
     // ref.listen(currentSelectedLocationProvider, (previous, next) {
     //   // Position has changed
     //   _controller.future.then((controller) {
@@ -134,8 +131,7 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
               children: [
                 TileLayer(
                   tileProvider: CancellableNetworkTileProvider(),
-                  urlTemplate:
-                      'https://api.mapbox.com/styles/v1/coolmogo/cmcsmzesv003201rf1ddn5zco/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiY29vbG1vZ28iLCJhIjoiY21jc2k1MW5hMTR4eDJtbXRrbnBmMDV6ZiJ9.tclAU2NfOf-8s0wetRfeRw',
+                  urlTemplate: widget.mapsUrlTemplate,
                   subdomains: const ['a', 'b', 'c'],
                 ),
                 MarkerLayer(
@@ -151,21 +147,6 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
                     },
                   ).toList(),
                 ),
-                // SimpleAttributionWidget(
-                //   source: Text(
-                //     'OpenStreetMap contributors',
-                //   ),
-                //   onTap: () => launchUrl(Uri.parse('https://openstreetmap.org/copyright')), // (external)
-                // ),
-                // RichAttributionWidget(
-                //   // Include a stylish prebuilt attribution widget that meets all requirments
-                //   attributions: [
-                //     TextSourceAttribution(
-                //       'OpenStreetMap contributors',
-                //       onTap: () => launchUrl(Uri.parse('https://openstreetmap.org/copyright')), // (external)
-                //     ),
-                //   ],
-                // ),
               ],
             ),
           ),
