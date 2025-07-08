@@ -43,10 +43,47 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
     //carouselController.jumpTo(simonsVisits.length - 1);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      carouselController.animateTo(carouselController.position.maxScrollExtent, duration: Durations.long1, curve: Curves.easeInOut);
+      carouselController.animateTo(carouselController.position.maxScrollExtent, duration: Durations.long1, curve: Curves.easeInOut).then((_) {
+        // Add scroll listener for detecting scroll changes
+        carouselController.addListener(_onCarouselScroll);
+      });
     });
 
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    carouselController.removeListener(_onCarouselScroll);
+    carouselController.dispose();
+    super.dispose();
+  }
+
+  void _onCarouselScroll() {
+    if (!carouselController.hasClients) return;
+
+    // Determine if the selected item is currently visible in the viewport
+    final viewport = carouselController.position.viewportDimension;
+    final scrollOffset = carouselController.offset;
+    final selectedItemIndex = simonsVisits.indexOf(ref.read(currentSelectedLocationProvider));
+    final selectedItemStart = selectedItemIndex * tileOffest;
+    final selectedItemEnd = selectedItemStart + tileOffest;
+    final isSelectedItemVisible =
+        (selectedItemStart >= scrollOffset + locationVisitFocusMargin && selectedItemStart < scrollOffset + viewport - locationVisitFocusMargin) ||
+        (selectedItemEnd > scrollOffset + locationVisitFocusMargin && selectedItemEnd <= scrollOffset + viewport - locationVisitFocusMargin);
+
+    if (!isSelectedItemVisible) {
+      // Calculate which item is currently centered in the viewport
+      final offset = carouselController.offset;
+      final focusedOffset = offset + (carouselWidth - tileOffest);
+      final itemIndex = (focusedOffset / tileOffest).round().clamp(0, simonsVisits.length - 1);
+
+      // Update the selected location if it's different from the current one
+      final currentSelectedLocation = ref.read(currentSelectedLocationProvider);
+      if (itemIndex < simonsVisits.length && simonsVisits[itemIndex] != currentSelectedLocation) {
+        ref.read(currentSelectedLocationProvider.notifier).selectLocation(simonsVisits[itemIndex]);
+      }
+    }
   }
 
   void animateCarouselTo(LocationVisit visit) {
