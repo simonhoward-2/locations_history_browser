@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_animations/flutter_map_animations.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -24,9 +25,15 @@ class LocationsHistoryBrowser extends ConsumerStatefulWidget {
   ConsumerState<ConsumerStatefulWidget> createState() => _LocationsHistoryBrowserState();
 }
 
-class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowser> {
+class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowser> with TickerProviderStateMixin {
   late FutureProvider<String?> darkMapStyle;
   final carouselController = CarouselController();
+  late final _controller = AnimatedMapController(
+    vsync: this,
+    duration: const Duration(milliseconds: 500),
+    curve: Curves.easeInOut,
+    cancelPreviousAnimations: true, // Default to false
+  );
 
   final tileOffest = 200.0;
   final locationVisitFocusMargin = 50;
@@ -102,14 +109,12 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
     // }
 
     // watch for changes in the current location
-    // ref.listen(currentSelectedLocationProvider, (previous, next) {
-    //   // Position has changed
-    //   _controller.future.then((controller) {
-    //     controller.animateCamera(CameraUpdate.newLatLng(next.location.position));
-    //     controller.showMarkerInfoWindow(MarkerId(next.location.city));
-    //   });
-    //   animateCarouselTo(next);
-    // });
+    ref.listen(currentSelectedLocationProvider, (previous, next) {
+      // Position has changed
+      _controller.animateTo(dest: next.location.position);
+      // _controller.showMarkerInfoWindow(MarkerId(next.location.city));
+      //animateCarouselTo(next);
+    });
 
     final currentLocation = simonsVisits.last.location;
     var selectedLocation = ref.watch(currentSelectedLocationProvider);
@@ -126,8 +131,10 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
             width: 600,
             child: FlutterMap(
               options: MapOptions(
-                initialCenter: LatLng(currentLocation.position.latitude, currentLocation.position.longitude),
+                initialCenter: currentLocation.position,
+                initialZoom: 5.0,
               ),
+              mapController: _controller.mapController,
               children: [
                 TileLayer(
                   tileProvider: CancellableNetworkTileProvider(),
