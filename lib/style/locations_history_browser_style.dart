@@ -6,6 +6,9 @@ class LocationsHistoryBrowserStyle {
   final Color? selectedLocationTextColor;
   final Border? selectedLocationBorder;
 
+  final Color? markerColor;
+  final Color? selectedMarkerColor;
+
   final Color? locationVisitBackgroundColor;
   final Color? locationVisitTextColor;
   final Border? locationVisitBorder;
@@ -17,6 +20,8 @@ class LocationsHistoryBrowserStyle {
     this.locationVisitBackgroundColor,
     this.locationVisitTextColor,
     this.locationVisitBorder,
+    this.markerColor,
+    this.selectedMarkerColor,
   });
 
   LocationsHistoryBrowserStyle copyWith({
@@ -26,6 +31,8 @@ class LocationsHistoryBrowserStyle {
     Color? locationVisitBackgroundColor,
     Color? locationVisitTextColor,
     Border? locationVisitBorder,
+    Color? markerColor,
+    Color? selectedMarkerColor,
   }) {
     return LocationsHistoryBrowserStyle(
       selectedLocationBackgroundColor: selectedLocationBackgroundColor ?? this.selectedLocationBackgroundColor,
@@ -34,6 +41,8 @@ class LocationsHistoryBrowserStyle {
       locationVisitBackgroundColor: locationVisitBackgroundColor ?? this.locationVisitBackgroundColor,
       locationVisitTextColor: locationVisitTextColor ?? this.locationVisitTextColor,
       locationVisitBorder: locationVisitBorder ?? this.locationVisitBorder,
+      markerColor: markerColor ?? this.markerColor,
+      selectedMarkerColor: selectedMarkerColor ?? this.selectedMarkerColor,
     );
   }
 }
