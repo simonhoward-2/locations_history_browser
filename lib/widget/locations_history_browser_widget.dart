@@ -1,4 +1,5 @@
 import 'package:collection/collection.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_animations/flutter_map_animations.dart';
@@ -198,9 +199,13 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
         // Map
         Align(
           alignment: Alignment.center,
-          child: SizedBox(
+          child: Container(
             height: 400,
             width: 600,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28.0),
+            ),
             child: FlutterMap(
               options: MapOptions(initialCenter: currentLocation.position, initialZoom: 5.0, onTap: (_, __) => _popupController.hideAllPopups()),
               mapController: _controller.mapController,
@@ -230,19 +235,44 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
           width: carouselWidth,
           child: ConstrainedBox(
             constraints: BoxConstraints(maxHeight: 150),
-            child: CarouselView(
-              itemExtent: tileOffest,
-              controller: carouselController,
-              onTap: null,
-              enableSplash: false,
-              shape: Border(),
-              children: widget.locationVisits.mapIndexed((index, visit) {
-                String? yearHeader;
-                if (index == 0 || (visit.end != null && visit.end!.year > widget.locationVisits[index - 1].end!.year)) {
-                  yearHeader = visit.end!.year.toString();
+            child: Listener(
+              onPointerSignal: (pointerSignal) {
+                if (pointerSignal is PointerScrollEvent) {
+                  // Get the current scroll position
+                  final currentOffset = carouselController.offset;
+                  
+                  // Calculate scroll delta (adjust sensitivity as needed)
+                  final scrollDelta = pointerSignal.scrollDelta.dy * 2; // Multiply by 2 for better sensitivity
+                  
+                  // Calculate new offset
+                  final newOffset = (currentOffset + scrollDelta).clamp(
+                    0.0, 
+                    carouselController.position.maxScrollExtent,
+                  );
+                  
+                  // Animate to new position
+                  carouselController.animateTo(
+                    newOffset,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                  );
                 }
-                return carouselBox(visit, visit == selectedLocation, yearHeader, dateFormat);
-              }).toList(),
+              },
+              child: CarouselView(
+                itemExtent: tileOffest,
+                controller: carouselController,
+                onTap: null,
+                enableSplash: false,
+                
+                shape: Border(),
+                children: widget.locationVisits.mapIndexed((index, visit) {
+                  String? yearHeader;
+                  if (index == 0 || (visit.end != null && visit.end!.year > widget.locationVisits[index - 1].end!.year)) {
+                    yearHeader = visit.end!.year.toString();
+                  }
+                  return carouselBox(visit, visit == selectedLocation, yearHeader, dateFormat);
+                }).toList(),
+              ),
             ),
           ),
         ),
