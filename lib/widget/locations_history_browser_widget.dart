@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_animations/flutter_map_animations.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
+import 'package:flutter_map_marker_popup/flutter_map_marker_popup.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:locations_history_browser/models/location.dart';
 
-import '../constants/simons_visits.dart';
 import '../models/location_visit.dart';
 import '../state/current_selected_location.dart';
 import '../style/locations_history_browser_style.dart';
@@ -14,19 +15,15 @@ import '../style/locations_history_browser_style.dart';
 class LocationsHistoryBrowser extends ConsumerStatefulWidget {
   final LocationsHistoryBrowserStyle? style;
   final String mapsUrlTemplate;
+  final List<LocationVisit> locationVisits;
 
-  const LocationsHistoryBrowser({
-    super.key,
-    this.style,
-    required this.mapsUrlTemplate,
-  });
+  const LocationsHistoryBrowser({super.key, this.style, required this.mapsUrlTemplate, required this.locationVisits});
 
   @override
   ConsumerState<ConsumerStatefulWidget> createState() => _LocationsHistoryBrowserState();
 }
 
 class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowser> with TickerProviderStateMixin {
-  late FutureProvider<String?> darkMapStyle;
   final carouselController = CarouselController();
   late final _controller = AnimatedMapController(
     vsync: this,
@@ -34,18 +31,26 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
     curve: Curves.easeInOut,
     cancelPreviousAnimations: true, // Default to false
   );
+  final PopupController _popupController = PopupController();
 
   final tileOffest = 200.0;
   final locationVisitFocusMargin = 50;
   final carouselWidth = 600.0;
 
+  late final Map<Location, List<LocationVisit>> _locationsMap = {};
+
   @override
   void initState() {
-    // Load the dark map style
-    darkMapStyle = FutureProvider((ref) async {
-      return await DefaultAssetBundle.of(context).loadString('assets/maps_dark_theme.json');
-    });
+    // Create a map of locations to visits for quick access
+    for (var visit in widget.locationVisits) {
+      if (_locationsMap.containsKey(visit.location)) {
+        _locationsMap[visit.location]!.add(visit);
+      } else {
+        _locationsMap[visit.location] = [visit];
+      }
+    }
 
+    // Animate to strarting position
     WidgetsBinding.instance.addPostFrameCallback((_) {
       carouselController.animateTo(carouselController.position.maxScrollExtent, duration: Durations.long1, curve: Curves.easeInOut).then((_) {
         // Add scroll listener for detecting scroll changes
@@ -69,7 +74,7 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
     // Determine if the selected item is currently visible in the viewport
     final viewport = carouselController.position.viewportDimension;
     final scrollOffset = carouselController.offset;
-    final selectedItemIndex = simonsVisits.indexOf(ref.read(currentSelectedLocationProvider));
+    final selectedItemIndex = widget.locationVisits.indexOf(ref.read(currentSelectedLocationProvider));
     final selectedItemStart = selectedItemIndex * tileOffest;
     final selectedItemEnd = selectedItemStart + tileOffest;
     final isSelectedItemVisible =
@@ -80,21 +85,59 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
       // Calculate which item is currently centered in the viewport
       final offset = carouselController.offset;
       final focusedOffset = offset + (carouselWidth - tileOffest);
-      final itemIndex = (focusedOffset / tileOffest).round().clamp(0, simonsVisits.length - 1);
+      final itemIndex = (focusedOffset / tileOffest).round().clamp(0, widget.locationVisits.length - 1);
 
       // Update the selected location if it's different from the current one
       final currentSelectedLocation = ref.read(currentSelectedLocationProvider);
-      if (itemIndex < simonsVisits.length && simonsVisits[itemIndex] != currentSelectedLocation) {
-        ref.read(currentSelectedLocationProvider.notifier).selectLocation(simonsVisits[itemIndex]);
+      if (itemIndex < widget.locationVisits.length && widget.locationVisits[itemIndex] != currentSelectedLocation) {
+        ref.read(currentSelectedLocationProvider.notifier).selectLocation(widget.locationVisits[itemIndex]);
       }
     }
   }
 
   void animateCarouselTo(LocationVisit visit) {
-    var index = simonsVisits.indexOf(visit);
+    // Remove the listener to prevent triggering during animation
+    carouselController.removeListener(_onCarouselScroll);
+
+    // Calculate the desired offset to center the visit in the carousel
+    var index = widget.locationVisits.indexOf(visit);
     var desiredOffset = index * tileOffest - (carouselWidth - tileOffest) / 2;
     var offset = desiredOffset.clamp(0, carouselController.position.maxScrollExtent) as double;
-    carouselController.animateTo(offset, duration: Durations.long1, curve: Curves.easeInOut);
+
+    // Animate to the calculated offset
+    carouselController.animateTo(offset, duration: Durations.long1, curve: Curves.easeInOut).then((_) {
+      // Re-add the listener after the animation completes
+      carouselController.addListener(_onCarouselScroll);
+    });
+  }
+
+  Widget _buildPopupContent(Location location) {
+    final dateFormat = DateFormat('MMM y');
+    final visits = _locationsMap[location] ?? [];
+    return Container(
+      padding: const EdgeInsets.all(12.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8.0),
+        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4.0, offset: Offset(0, 2))],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${location.city}, ${location.country}',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
+          ),
+          SizedBox(height: 4),
+          for (final visit in visits)
+            Text(
+              '${dateFormat.format(visit.start)} - ${visit.end != null ? dateFormat.format(visit.end!) : "Present"}',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -108,15 +151,43 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
     //   themeMode = MediaQuery.of(context).platformBrightness == Brightness.dark ? ThemeMode.dark : ThemeMode.light;
     // }
 
+    final markers = _locationsMap.entries
+        .map(
+          (e) => Marker(
+            key: ValueKey(e.key),
+            point: e.key.position,
+            child: GestureDetector(
+              onTap: () {
+                // Update selected location to last visit for this location
+                final lastVisit = e.value.last;
+                ref.read(currentSelectedLocationProvider.notifier).selectLocation(lastVisit);
+                // Animate carousel to show the selected location
+                animateCarouselTo(lastVisit);
+              },
+              child: Icon(
+                Icons.location_on,
+                color: e.key == ref.watch(currentSelectedLocationProvider).location
+                    ? widget.style?.selectedMarkerColor ?? Colors.red
+                    : widget.style?.markerColor ?? Colors.black,
+                size: 30,
+              ),
+            ),
+          ),
+        )
+        .toList();
+
     // watch for changes in the current location
     ref.listen(currentSelectedLocationProvider, (previous, next) {
       // Position has changed
       _controller.animateTo(dest: next.location.position);
-      // _controller.showMarkerInfoWindow(MarkerId(next.location.city));
-      //animateCarouselTo(next);
+
+      final index = _locationsMap.keys.toList().indexOf(next.location);
+      final marker = markers[index];
+
+      _popupController.showPopupsOnlyFor([marker]);
     });
 
-    final currentLocation = simonsVisits.last.location;
+    final currentLocation = widget.locationVisits.last.location;
     var selectedLocation = ref.watch(currentSelectedLocationProvider);
 
     final dateFormat = DateFormat('MMM y');
@@ -130,29 +201,21 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
             height: 400,
             width: 600,
             child: FlutterMap(
-              options: MapOptions(
-                initialCenter: currentLocation.position,
-                initialZoom: 5.0,
-              ),
+              options: MapOptions(initialCenter: currentLocation.position, initialZoom: 5.0, onTap: (_, __) => _popupController.hideAllPopups()),
               mapController: _controller.mapController,
               children: [
-                TileLayer(
-                  tileProvider: CancellableNetworkTileProvider(),
-                  urlTemplate: widget.mapsUrlTemplate,
-                  subdomains: const ['a', 'b', 'c'],
-                ),
-                MarkerLayer(
-                  markers: simonsVisits.map(
-                    (e) {
-                      return Marker(
-                        point: LatLng(e.location.position.latitude, e.location.position.longitude),
-                        child: Icon(
-                          Icons.location_on,
-                          color: e == selectedLocation ? widget.style?.selectedMarkerColor ?? Colors.red : widget.style?.markerColor ?? Colors.black,
-                        ),
-                      );
-                    },
-                  ).toList(),
+                TileLayer(tileProvider: CancellableNetworkTileProvider(), urlTemplate: widget.mapsUrlTemplate, subdomains: const ['a', 'b', 'c']),
+                PopupMarkerLayer(
+                  options: PopupMarkerLayerOptions(
+                    popupController: _popupController,
+                    markers: markers,
+                    popupDisplayOptions: PopupDisplayOptions(
+                      builder: (_, Marker marker) {
+                        final location = _locationsMap.keys.firstWhere((v) => ValueKey(v) == marker.key);
+                        return _buildPopupContent(location);
+                      },
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -170,9 +233,9 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
               itemExtent: tileOffest,
               controller: carouselController,
               onTap: (value) {
-                ref.read(currentSelectedLocationProvider.notifier).selectLocation(simonsVisits[value]);
+                ref.read(currentSelectedLocationProvider.notifier).selectLocation(widget.locationVisits[value]);
               },
-              children: simonsVisits.map((visit) {
+              children: widget.locationVisits.map((visit) {
                 return ColoredBox(
                   color: visit == selectedLocation ? selectedLocationBackgroundColor : locationsVisitBackgroundColor,
                   child: Padding(
