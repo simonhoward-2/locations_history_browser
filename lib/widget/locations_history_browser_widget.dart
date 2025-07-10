@@ -5,15 +5,13 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_animations/flutter_map_animations.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:flutter_map_marker_popup/flutter_map_marker_popup.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:locations_history_browser/models/location.dart';
 
 import '../models/location_visit.dart';
-import '../state/current_selected_location.dart';
 import '../style/locations_history_browser_style.dart';
 
-class LocationsHistoryBrowser extends ConsumerStatefulWidget {
+class LocationsHistoryBrowser extends StatefulWidget {
   final LocationsHistoryBrowserStyle? style;
   final String mapsUrlTemplate;
   final List<LocationVisit> locationVisits;
@@ -21,10 +19,10 @@ class LocationsHistoryBrowser extends ConsumerStatefulWidget {
   const LocationsHistoryBrowser({super.key, this.style, required this.mapsUrlTemplate, required this.locationVisits});
 
   @override
-  ConsumerState<ConsumerStatefulWidget> createState() => _LocationsHistoryBrowserState();
+  State<StatefulWidget> createState() => _LocationsHistoryBrowserState();
 }
 
-class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowser> with TickerProviderStateMixin {
+class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with TickerProviderStateMixin {
   final carouselController = CarouselController();
   late final _controller = AnimatedMapController(
     vsync: this,
@@ -36,20 +34,22 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
 
   final tileOffest = 200.0;
   final locationVisitFocusMargin = 100;
-  final carouselWidth = 600.0;
 
   late final Map<Location, List<LocationVisit>> _locationsMap = {};
 
-  late final currentSelectedLocationProvider = StateNotifierProvider<CurrentSelectedLocationNotifier, LocationVisit>((ref) {
-    return CurrentSelectedLocationNotifier(widget.locationVisits.last);
-  });
+  var markers = <Marker>[];
+
+  late final List<LocationVisit> sortedVisits = widget.locationVisits.sortedBy((visit) => visit.start).toList();
+
+  // state object
+  late LocationVisit currentSelectedLocationVisit = sortedVisits.last;
 
   int activeAnimations = 0; // Keep track of active animations, so we can avoid re-adding listeners during animations
 
   @override
   void initState() {
     // Create a map of locations to visits for quick access
-    for (var visit in widget.locationVisits) {
+    for (var visit in sortedVisits) {
       if (_locationsMap.containsKey(visit.location)) {
         _locationsMap[visit.location]!.add(visit);
       } else {
@@ -81,7 +81,7 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
     // Determine if the selected item is currently visible in the viewport
     final viewport = carouselController.position.viewportDimension;
     final scrollOffset = carouselController.offset;
-    final selectedItemIndex = widget.locationVisits.indexOf(ref.read(currentSelectedLocationProvider));
+    final selectedItemIndex = sortedVisits.indexOf(currentSelectedLocationVisit);
     final selectedItemStart = selectedItemIndex * tileOffest;
     final selectedItemEnd = selectedItemStart + tileOffest;
     final isSelectedItemVisible =
@@ -91,20 +91,33 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
     if (!isSelectedItemVisible) {
       // Calculate which item is currently centered in the viewport
       final offset = carouselController.offset;
+      final carouselWidth = carouselController.position.viewportDimension;
       final focusedOffset = offset + (carouselWidth - tileOffest);
-      final itemIndex = (focusedOffset / tileOffest).round().clamp(0, widget.locationVisits.length - 1);
+      final itemIndex = (focusedOffset / tileOffest).round().clamp(0, sortedVisits.length - 1);
 
       // Update the selected location if it's different from the current one
-      final currentSelectedLocation = ref.read(currentSelectedLocationProvider);
-      if (itemIndex < widget.locationVisits.length && widget.locationVisits[itemIndex] != currentSelectedLocation) {
-        ref.read(currentSelectedLocationProvider.notifier).selectLocationVisit(widget.locationVisits[itemIndex]);
+      if (itemIndex < sortedVisits.length && sortedVisits[itemIndex] != currentSelectedLocationVisit) {
+        updateLocation(sortedVisits[itemIndex]);
       }
     }
   }
 
+  void updateLocation(LocationVisit visit) {
+    setState(() {
+      currentSelectedLocationVisit = visit;
+
+      _controller.animateTo(dest: visit.location.position);
+
+      final index = _locationsMap.keys.toList().indexOf(visit.location);
+      final marker = markers[index];
+
+      _popupController.showPopupsOnlyFor([marker]);
+    });
+  }
+
   void locationVisitClicked(LocationVisit visit) {
     // Update the selected location to the clicked visit
-    ref.read(currentSelectedLocationProvider.notifier).selectLocationVisit(visit);
+    updateLocation(visit);
     // Animate carousel to show the selected location
     animateCarouselTo(visit);
   }
@@ -115,7 +128,8 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
     activeAnimations++;
 
     // Calculate the desired offset to center the visit in the carousel
-    var index = widget.locationVisits.indexOf(visit);
+    var index = sortedVisits.indexOf(visit);
+    final carouselWidth = carouselController.position.viewportDimension;
     var desiredOffset = index * tileOffest - (carouselWidth - tileOffest) / 2;
     var offset = desiredOffset.clamp(0, carouselController.position.maxScrollExtent) as double;
 
@@ -163,13 +177,10 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
   Widget build(BuildContext context) {
     const currentLocationIcon = Icons.person;
     const normalLocationIcon = Icons.location_on;
-    final currentLocation = widget.locationVisits.last.location;
-
-    var selectedLocationVisit = ref.watch(currentSelectedLocationProvider);
+    final currentLocation = sortedVisits.last.location;
 
     // Build markers
-    final markers = <Marker>[];
-
+    markers.clear();
     for (final entry in _locationsMap.entries) {
       final marker = Marker(
         key: ValueKey(entry.key),
@@ -186,7 +197,7 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
           },
           child: Icon(
             entry.key == currentLocation ? currentLocationIcon : normalLocationIcon,
-            color: entry.key == selectedLocationVisit.location
+            color: entry.key == currentSelectedLocationVisit.location
                 ? widget.style?.selectedMarkerColor ?? Colors.red
                 : widget.style?.markerColor ?? Colors.black,
             size: 30,
@@ -196,44 +207,38 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
       markers.add(marker);
     }
 
-    // watch for changes in the current location
-    ref.listen(currentSelectedLocationProvider, (previous, next) {
-      // Position has changed
-      _controller.animateTo(dest: next.location.position);
-
-      final index = _locationsMap.keys.toList().indexOf(next.location);
-      final marker = markers[index];
-
-      _popupController.showPopupsOnlyFor([marker]);
-    });
-
     final dateFormat = DateFormat('MMM y');
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        InkWell(
-          borderRadius: BorderRadius.circular(28.0),
-          onTap: () {
-            // Animate carousel to show the current location
-            final currentVisit = widget.locationVisits.last;
-            locationVisitClicked(currentVisit);
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(currentLocationIcon),
-                SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Current location: ${currentLocation.city}, ${currentLocation.country}'),
-                    Text('Timezone: ${currentLocation.timeZoneString}'),
-                  ],
-                ),
-              ],
+        // Current location
+        Align(
+          alignment: Alignment.center,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(28.0),
+            onTap: () {
+              // Animate carousel to show the current location
+              final currentVisit = sortedVisits.last;
+              locationVisitClicked(currentVisit);
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(currentLocationIcon),
+                  SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Current location: ${currentLocation.city}, ${currentLocation.country}'),
+                      Text('Timezone: ${currentLocation.timeZoneString}'),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -243,7 +248,6 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
           alignment: Alignment.center,
           child: Container(
             height: 400,
-            width: carouselWidth,
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(28.0),
@@ -271,7 +275,6 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
         ),
         SizedBox(height: 20),
         SizedBox(
-          width: carouselWidth,
           child: ConstrainedBox(
             constraints: BoxConstraints(maxHeight: 150),
             child: Listener(
@@ -304,12 +307,12 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
                 enableSplash: false,
 
                 shape: Border(),
-                children: widget.locationVisits.mapIndexed((index, visit) {
+                children: sortedVisits.mapIndexed((index, visit) {
                   String? yearHeader;
-                  if (index == 0 || (visit.end != null && visit.end!.year > widget.locationVisits[index - 1].end!.year)) {
+                  if (index == 0 || (visit.end != null && visit.end!.year > sortedVisits[index - 1].end!.year)) {
                     yearHeader = visit.end!.year.toString();
                   }
-                  return carouselBox(visit, visit == selectedLocationVisit, yearHeader, dateFormat);
+                  return carouselBox(visit, visit == currentSelectedLocationVisit, yearHeader, dateFormat);
                 }).toList(),
               ),
             ),
@@ -407,7 +410,7 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
                   color: Colors.transparent,
                   child: InkWell(
                     onTap: () {
-                      ref.read(currentSelectedLocationProvider.notifier).selectLocationVisit(visit);
+                      updateLocation(visit);
                     },
                     overlayColor: effectiveOverlayColor,
                   ),
