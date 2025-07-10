@@ -3,5 +3,7 @@ export 'package:latlong2/latlong.dart';
 // models
 export 'models/location_visit.dart';
 export 'models/location.dart';
+// style
+export 'style/locations_history_browser_style.dart';
 // widget
 export 'widget/locations_history_browser_widget.dart';

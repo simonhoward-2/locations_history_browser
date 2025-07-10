@@ -35,7 +35,7 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
   final PopupController _popupController = PopupController();
 
   final tileOffest = 200.0;
-  final locationVisitFocusMargin = 50;
+  final locationVisitFocusMargin = 100;
   final carouselWidth = 600.0;
 
   late final Map<Location, List<LocationVisit>> _locationsMap = {};
@@ -43,6 +43,8 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
   late final currentSelectedLocationProvider = StateNotifierProvider<CurrentSelectedLocationNotifier, LocationVisit>((ref) {
     return CurrentSelectedLocationNotifier(widget.locationVisits.last);
   });
+
+  int activeAnimations = 0; // Keep track of active animations, so we can avoid re-adding listeners during animations
 
   @override
   void initState() {
@@ -100,9 +102,17 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
     }
   }
 
+  void locationVisitClicked(LocationVisit visit) {
+    // Update the selected location to the clicked visit
+    ref.read(currentSelectedLocationProvider.notifier).selectLocationVisit(visit);
+    // Animate carousel to show the selected location
+    animateCarouselTo(visit);
+  }
+
   void animateCarouselTo(LocationVisit visit) {
     // Remove the listener to prevent triggering during animation
     carouselController.removeListener(_onCarouselScroll);
+    activeAnimations++;
 
     // Calculate the desired offset to center the visit in the carousel
     var index = widget.locationVisits.indexOf(visit);
@@ -111,8 +121,12 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
 
     // Animate to the calculated offset
     carouselController.animateTo(offset, duration: Durations.long1, curve: Curves.easeInOut).then((_) {
-      // Re-add the listener after the animation completes
-      carouselController.addListener(_onCarouselScroll);
+      activeAnimations--;
+      if (activeAnimations <= 0) {
+        activeAnimations = 0; // Reset active animations count in case
+        // Re-add the listener after all animations completes
+        carouselController.addListener(_onCarouselScroll);
+      }
     });
   }
 
@@ -147,12 +161,13 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
 
   @override
   Widget build(BuildContext context) {
-    // Get the theme mode for the map styling
-    // var themeMode = ref.watch(settingsProvider).themeMode;
-    // if (themeMode == ThemeMode.system) {
-    //   themeMode = MediaQuery.of(context).platformBrightness == Brightness.dark ? ThemeMode.dark : ThemeMode.light;
-    // }
+    const currentLocationIcon = Icons.person;
+    const normalLocationIcon = Icons.location_on;
+    final currentLocation = widget.locationVisits.last.location;
 
+    var selectedLocationVisit = ref.watch(currentSelectedLocationProvider);
+
+    // Build markers
     final markers = _locationsMap.entries
         .map(
           (e) => Marker(
@@ -162,13 +177,11 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
               onTap: () {
                 // Update selected location to last visit for this location
                 final lastVisit = e.value.last;
-                ref.read(currentSelectedLocationProvider.notifier).selectLocationVisit(lastVisit);
-                // Animate carousel to show the selected location
-                animateCarouselTo(lastVisit);
+                locationVisitClicked(lastVisit);
               },
               child: Icon(
-                Icons.location_on,
-                color: e.key == ref.watch(currentSelectedLocationProvider).location
+                e.key == currentLocation ? currentLocationIcon : normalLocationIcon,
+                color: e.key == selectedLocationVisit.location
                     ? widget.style?.selectedMarkerColor ?? Colors.red
                     : widget.style?.markerColor ?? Colors.black,
                 size: 30,
@@ -189,19 +202,43 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
       _popupController.showPopupsOnlyFor([marker]);
     });
 
-    final currentLocation = widget.locationVisits.last.location;
-    var selectedLocation = ref.watch(currentSelectedLocationProvider);
-
     final dateFormat = DateFormat('MMM y');
 
     return Column(
       children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(28.0),
+          onTap: () {
+            // Animate carousel to show the current location
+            final currentVisit = widget.locationVisits.last;
+            locationVisitClicked(currentVisit);
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(currentLocationIcon),
+                SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Current location: ${currentLocation.city}, ${currentLocation.country}'),
+                    Text('Timezone: ${currentLocation.timeZoneString}'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(height: 20),
         // Map
         Align(
           alignment: Alignment.center,
           child: Container(
             height: 400,
-            width: 600,
+            width: carouselWidth,
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(28.0),
@@ -228,9 +265,6 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
           ),
         ),
         SizedBox(height: 20),
-        Text('Current location: ${currentLocation.city}, ${currentLocation.country}'),
-        Text('Timezone: ${currentLocation.timeZoneString}'),
-        SizedBox(height: 20),
         SizedBox(
           width: carouselWidth,
           child: ConstrainedBox(
@@ -240,16 +274,16 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
                 if (pointerSignal is PointerScrollEvent) {
                   // Get the current scroll position
                   final currentOffset = carouselController.offset;
-                  
+
                   // Calculate scroll delta (adjust sensitivity as needed)
                   final scrollDelta = pointerSignal.scrollDelta.dy * 2; // Multiply by 2 for better sensitivity
-                  
+
                   // Calculate new offset
                   final newOffset = (currentOffset + scrollDelta).clamp(
-                    0.0, 
+                    0.0,
                     carouselController.position.maxScrollExtent,
                   );
-                  
+
                   // Animate to new position
                   carouselController.animateTo(
                     newOffset,
@@ -263,14 +297,14 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
                 controller: carouselController,
                 onTap: null,
                 enableSplash: false,
-                
+
                 shape: Border(),
                 children: widget.locationVisits.mapIndexed((index, visit) {
                   String? yearHeader;
                   if (index == 0 || (visit.end != null && visit.end!.year > widget.locationVisits[index - 1].end!.year)) {
                     yearHeader = visit.end!.year.toString();
                   }
-                  return carouselBox(visit, visit == selectedLocation, yearHeader, dateFormat);
+                  return carouselBox(visit, visit == selectedLocationVisit, yearHeader, dateFormat);
                 }).toList(),
               ),
             ),
@@ -288,6 +322,9 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
   ) {
     final locationsVisitBackgroundColor = widget.style?.locationVisitBackgroundColor ?? Colors.teal;
     final selectedLocationBackgroundColor = widget.style?.selectedLocationBackgroundColor ?? Colors.blue;
+    final locationsVisitTextColor = widget.style?.locationVisitTextColor ?? Colors.black;
+    final selectedLocationTextColor = widget.style?.selectedLocationTextColor ?? Colors.white;
+    final textColor = selected ? selectedLocationTextColor : locationsVisitTextColor;
 
     final WidgetStateProperty<Color?> effectiveOverlayColor = WidgetStateProperty.resolveWith((Set<WidgetState> states) {
       if (states.contains(WidgetState.pressed)) {
@@ -338,6 +375,9 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
                         Flexible(
                           child: Text(
                             '${visit.location.city}, ${visit.location.country}',
+                            style: TextStyle(
+                              color: textColor,
+                            ),
                             maxLines: 1,
                             textAlign: TextAlign.center,
                             overflow: TextOverflow.fade,
@@ -346,6 +386,9 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
                         Flexible(
                           child: Text(
                             '${dateFormat.format(visit.start)} - ${visit.end != null ? dateFormat.format(visit.end!) : "Present"}',
+                            style: TextStyle(
+                              color: textColor,
+                            ),
                             textAlign: TextAlign.center,
                             overflow: TextOverflow.fade,
                             maxLines: 1,
