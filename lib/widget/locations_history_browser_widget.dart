@@ -168,28 +168,33 @@ class _LocationsHistoryBrowserState extends ConsumerState<LocationsHistoryBrowse
     var selectedLocationVisit = ref.watch(currentSelectedLocationProvider);
 
     // Build markers
-    final markers = _locationsMap.entries
-        .map(
-          (e) => Marker(
-            key: ValueKey(e.key),
-            point: e.key.position,
-            child: GestureDetector(
-              onTap: () {
-                // Update selected location to last visit for this location
-                final lastVisit = e.value.last;
-                locationVisitClicked(lastVisit);
-              },
-              child: Icon(
-                e.key == currentLocation ? currentLocationIcon : normalLocationIcon,
-                color: e.key == selectedLocationVisit.location
-                    ? widget.style?.selectedMarkerColor ?? Colors.red
-                    : widget.style?.markerColor ?? Colors.black,
-                size: 30,
-              ),
-            ),
+    final markers = <Marker>[];
+
+    for (final entry in _locationsMap.entries) {
+      final marker = Marker(
+        key: ValueKey(entry.key),
+        point: entry.key.position,
+        child: GestureDetector(
+          onTap: () {
+            // Update selected location to last visit for this location
+            final lastVisit = entry.value.last;
+            locationVisitClicked(lastVisit);
+
+            // Show popup for this marker
+            final currentMarker = markers.firstWhere((m) => m.key == ValueKey(entry.key));
+            _popupController.showPopupsOnlyFor([currentMarker]);
+          },
+          child: Icon(
+            entry.key == currentLocation ? currentLocationIcon : normalLocationIcon,
+            color: entry.key == selectedLocationVisit.location
+                ? widget.style?.selectedMarkerColor ?? Colors.red
+                : widget.style?.markerColor ?? Colors.black,
+            size: 30,
           ),
-        )
-        .toList();
+        ),
+      );
+      markers.add(marker);
+    }
 
     // watch for changes in the current location
     ref.listen(currentSelectedLocationProvider, (previous, next) {
