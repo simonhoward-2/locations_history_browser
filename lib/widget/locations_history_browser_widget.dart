@@ -16,7 +16,12 @@ class LocationsHistoryBrowser extends StatefulWidget {
   final String mapsUrlTemplate;
   final List<LocationVisit> locationVisits;
 
-  const LocationsHistoryBrowser({super.key, this.style, required this.mapsUrlTemplate, required this.locationVisits});
+  LocationsHistoryBrowser({
+    super.key,
+    this.style,
+    required this.mapsUrlTemplate,
+    required this.locationVisits,
+  }) : assert(locationVisits.where((visit) => visit.end == null).length <= 1, 'Only one location visit can be ongoing (end == null)');
 
   @override
   State<StatefulWidget> createState() => _LocationsHistoryBrowserState();
@@ -42,7 +47,7 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
   late final List<LocationVisit> sortedVisits = widget.locationVisits.sortedBy((visit) => visit.start).toList();
 
   // state object
-  late LocationVisit currentSelectedLocationVisit = sortedVisits.last;
+  late LocationVisit? currentSelectedLocationVisit = sortedVisits.isNotEmpty ? sortedVisits.last : null;
 
   int activeAnimations = 0; // Keep track of active animations, so we can avoid re-adding listeners during animations
 
@@ -59,10 +64,12 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
 
     // Animate to strarting position
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      carouselController.animateTo(carouselController.position.maxScrollExtent, duration: Durations.long1, curve: Curves.easeInOut).then((_) {
-        // Add scroll listener for detecting scroll changes
-        carouselController.addListener(_onCarouselScroll);
-      });
+      if (sortedVisits.isNotEmpty && carouselController.hasClients) {
+        carouselController.animateTo(carouselController.position.maxScrollExtent, duration: Durations.long1, curve: Curves.easeInOut).then((_) {
+          // Add scroll listener for detecting scroll changes
+          carouselController.addListener(_onCarouselScroll);
+        });
+      }
     });
 
     super.initState();
@@ -76,12 +83,12 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
   }
 
   void _onCarouselScroll() {
-    if (!carouselController.hasClients) return;
+    if (!carouselController.hasClients || sortedVisits.isEmpty || currentSelectedLocationVisit == null) return;
 
     // Determine if the selected item is currently visible in the viewport
     final viewport = carouselController.position.viewportDimension;
     final scrollOffset = carouselController.offset;
-    final selectedItemIndex = sortedVisits.indexOf(currentSelectedLocationVisit);
+    final selectedItemIndex = sortedVisits.indexOf(currentSelectedLocationVisit!);
     final selectedItemStart = selectedItemIndex * tileOffest;
     final selectedItemEnd = selectedItemStart + tileOffest;
     final isSelectedItemVisible =
@@ -123,6 +130,8 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
   }
 
   void animateCarouselTo(LocationVisit visit) {
+    if (sortedVisits.isEmpty || !carouselController.hasClients) return;
+
     // Remove the listener to prevent triggering during animation
     carouselController.removeListener(_onCarouselScroll);
     activeAnimations++;
@@ -160,6 +169,7 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
         children: [
           Text(
             '${location.city}, ${location.country}',
+            key: Key('popup_${location.city}_${location.country}'),
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
           ),
           SizedBox(height: 4),
@@ -175,6 +185,13 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
 
   @override
   Widget build(BuildContext context) {
+    if (sortedVisits.isEmpty) {
+      // Handle empty state
+      return const Center(
+        child: Text('No location visits to display'),
+      );
+    }
+
     const currentLocationIcon = Icons.person;
     const normalLocationIcon = Icons.location_on;
     final currentLocation = sortedVisits.last.location;
@@ -197,7 +214,7 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
           },
           child: Icon(
             entry.key == currentLocation ? currentLocationIcon : normalLocationIcon,
-            color: entry.key == currentSelectedLocationVisit.location
+            color: entry.key == currentSelectedLocationVisit?.location
                 ? widget.style?.selectedMarkerColor ?? Colors.red
                 : widget.style?.markerColor ?? Colors.black,
             size: 30,
@@ -242,38 +259,39 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
             ),
           ),
         ),
-        SizedBox(height: 20),
+        SizedBox(height: 16),
         // Map
-        Align(
-          alignment: Alignment.center,
-          child: Container(
-            height: 400,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28.0),
-            ),
-            child: FlutterMap(
-              options: MapOptions(initialCenter: currentLocation.position, initialZoom: 5.0, onTap: (_, __) => _popupController.hideAllPopups()),
-              mapController: _controller.mapController,
-              children: [
-                TileLayer(tileProvider: CancellableNetworkTileProvider(), urlTemplate: widget.mapsUrlTemplate, subdomains: const ['a', 'b', 'c']),
-                PopupMarkerLayer(
-                  options: PopupMarkerLayerOptions(
-                    popupController: _popupController,
-                    markers: markers,
-                    popupDisplayOptions: PopupDisplayOptions(
-                      builder: (_, Marker marker) {
-                        final location = _locationsMap.keys.firstWhere((v) => ValueKey(v) == marker.key);
-                        return _buildPopupContent(location);
-                      },
+        Expanded(
+          child: Align(
+            alignment: Alignment.center,
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28.0),
+              ),
+              child: FlutterMap(
+                options: MapOptions(initialCenter: currentLocation.position, initialZoom: 5.0, onTap: (_, __) => _popupController.hideAllPopups()),
+                mapController: _controller.mapController,
+                children: [
+                  TileLayer(tileProvider: CancellableNetworkTileProvider(), urlTemplate: widget.mapsUrlTemplate, subdomains: const ['a', 'b', 'c']),
+                  PopupMarkerLayer(
+                    options: PopupMarkerLayerOptions(
+                      popupController: _popupController,
+                      markers: markers,
+                      popupDisplayOptions: PopupDisplayOptions(
+                        builder: (_, Marker marker) {
+                          final location = _locationsMap.keys.firstWhere((v) => ValueKey(v) == marker.key);
+                          return _buildPopupContent(location);
+                        },
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-        SizedBox(height: 20),
+        SizedBox(height: 16),
         SizedBox(
           child: ConstrainedBox(
             constraints: BoxConstraints(maxHeight: 150),
@@ -305,12 +323,17 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
                 controller: carouselController,
                 onTap: null,
                 enableSplash: false,
-
                 shape: Border(),
                 children: sortedVisits.mapIndexed((index, visit) {
                   String? yearHeader;
-                  if (index == 0 || (visit.end != null && visit.end!.year > sortedVisits[index - 1].end!.year)) {
-                    yearHeader = visit.end!.year.toString();
+                  if (index == 0) {
+                    yearHeader = visit.end?.year.toString() ?? visit.start.year.toString();
+                  } else {
+                    final previousYear = sortedVisits[index - 1].end?.year ?? sortedVisits[index - 1].start.year;
+                    final currentYear = visit.end?.year ?? visit.start.year;
+                    if (currentYear != previousYear) {
+                      yearHeader = currentYear.toString();
+                    }
                   }
                   return carouselBox(visit, visit == currentSelectedLocationVisit, yearHeader, dateFormat);
                 }).toList(),
@@ -354,13 +377,11 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
           child: yearHeader == null
               ? const SizedBox.shrink()
               : Center(
-                  child: Flexible(
-                    child: Text(
-                      yearHeader,
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.fade,
-                      maxLines: 1,
-                    ),
+                  child: Text(
+                    yearHeader,
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.fade,
+                    maxLines: 1,
                   ),
                 ),
         ),
@@ -383,10 +404,11 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
                         Flexible(
                           child: Text(
                             '${visit.location.city}, ${visit.location.country}',
+                            key: Key('carousel_${visit.location.city}_${visit.location.country}'),
                             style: TextStyle(
                               color: textColor,
                             ),
-                            maxLines: 1,
+                            softWrap: false,
                             textAlign: TextAlign.center,
                             overflow: TextOverflow.fade,
                           ),
@@ -399,7 +421,7 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
                             ),
                             textAlign: TextAlign.center,
                             overflow: TextOverflow.fade,
-                            maxLines: 1,
+                            softWrap: false,
                           ),
                         ),
                       ],
