@@ -13,13 +13,13 @@ import '../style/locations_history_browser_style.dart';
 
 class LocationsHistoryBrowser extends StatefulWidget {
   final LocationsHistoryBrowserStyle? style;
-  final String mapsUrlTemplate;
+  final String? mapsUrlTemplate;
   final List<LocationVisit> locationVisits;
 
   LocationsHistoryBrowser({
     super.key,
     this.style,
-    required this.mapsUrlTemplate,
+    this.mapsUrlTemplate,
     required this.locationVisits,
   }) : assert(locationVisits.where((visit) => visit.end == null).length <= 1, 'Only one location visit can be ongoing (end == null)');
 
@@ -141,7 +141,7 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
     var index = sortedVisits.indexOf(visit);
     final carouselWidth = carouselController.position.viewportDimension;
     var desiredOffset = index * tileOffest - (carouselWidth - tileOffest) / 2;
-    var offset = desiredOffset.clamp(0, carouselController.position.maxScrollExtent) as double;
+    var offset = desiredOffset.clamp(0.0, carouselController.position.maxScrollExtent);
 
     // Animate to the calculated offset
     carouselController.animateTo(offset, duration: Durations.long1, curve: Curves.easeInOut).then((_) {
@@ -310,7 +310,12 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
                   options: MapOptions(initialCenter: currentLocation.position, initialZoom: 5.0, onTap: (_, __) => _popupController.hideAllPopups()),
                   mapController: _controller.mapController,
                   children: [
-                    TileLayer(tileProvider: CancellableNetworkTileProvider(), urlTemplate: widget.mapsUrlTemplate, subdomains: const ['a', 'b', 'c']),
+                    if (widget.mapsUrlTemplate != null)
+                      TileLayer(
+                        tileProvider: CancellableNetworkTileProvider(),
+                        urlTemplate: widget.mapsUrlTemplate,
+                        subdomains: const ['a', 'b', 'c'],
+                      ),
                     PopupMarkerLayer(
                       options: PopupMarkerLayerOptions(
                         popupController: _popupController,

@@ -83,7 +83,6 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: LocationsHistoryBrowser(
-              mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
               locationVisits: testLocationVisits,
             ),
           ),
@@ -102,7 +101,6 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: LocationsHistoryBrowser(
-              mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
               locationVisits: testLocationVisits,
               style: testStyle,
             ),
@@ -122,7 +120,6 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: LocationsHistoryBrowser(
-              mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
               locationVisits: testLocationVisits,
             ),
           ),
@@ -147,7 +144,6 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: LocationsHistoryBrowser(
-              mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
               locationVisits: testLocationVisits,
             ),
           ),
@@ -171,7 +167,6 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: LocationsHistoryBrowser(
-              mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
               locationVisits: testLocationVisits,
             ),
           ),
@@ -191,7 +186,6 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: LocationsHistoryBrowser(
-              mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
               locationVisits: testLocationVisits,
             ),
           ),
@@ -214,7 +208,6 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: LocationsHistoryBrowser(
-              mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
               locationVisits: testLocationVisits,
               style: testStyle,
             ),
@@ -241,7 +234,6 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: LocationsHistoryBrowser(
-              mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
               locationVisits: testLocationVisits,
             ),
           ),
@@ -267,7 +259,6 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: LocationsHistoryBrowser(
-              mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
               locationVisits: testLocationVisits,
               style: testStyle,
             ),
@@ -296,7 +287,6 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: LocationsHistoryBrowser(
-              mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
               locationVisits: [],
             ),
           ),
@@ -316,7 +306,6 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: LocationsHistoryBrowser(
-              mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
               locationVisits: singleVisit,
             ),
           ),
@@ -336,7 +325,6 @@ void main() {
           MaterialApp(
             home: Scaffold(
               body: LocationsHistoryBrowser(
-                mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
                 locationVisits: testLocationVisits,
               ),
             ),
@@ -359,7 +347,6 @@ void main() {
           MaterialApp(
             home: Scaffold(
               body: LocationsHistoryBrowser(
-                mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
                 locationVisits: testLocationVisits,
               ),
             ),
@@ -412,7 +399,6 @@ void main() {
           MaterialApp(
             home: Scaffold(
               body: LocationsHistoryBrowser(
-                mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
                 locationVisits: visitsWithSameDate,
               ),
             ),
@@ -456,7 +442,6 @@ void main() {
           MaterialApp(
             home: Scaffold(
               body: LocationsHistoryBrowser(
-                mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
                 locationVisits: mockLocationVisits,
               ),
             ),
@@ -499,7 +484,6 @@ void main() {
           MaterialApp(
             home: Scaffold(
               body: LocationsHistoryBrowser(
-                mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
                 locationVisits: mockLocationVisits,
               ),
             ),
@@ -545,7 +529,6 @@ void main() {
           MaterialApp(
             home: Scaffold(
               body: LocationsHistoryBrowser(
-                mapsUrlTemplate: 'https://test.com/{z}/{x}/{y}.png',
                 locationVisits: mockLocationVisits,
               ),
             ),
