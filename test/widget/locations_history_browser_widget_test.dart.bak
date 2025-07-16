@@ -91,7 +91,7 @@ void main() {
       );
 
       // Wait for the widget to initialize with timeout
-      await tester.pumpAndSettle();
+      await tester.pumpAndSettle(const Duration(seconds: 5));
 
       // Check if the widget is rendered
       expect(find.byType(LocationsHistoryBrowser), findsOneWidget);
@@ -110,7 +110,7 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
+      await tester.pumpAndSettle(const Duration(seconds: 5));
 
       // Should display current location (last visit chronologically)
       expect(find.text('Current location: New York, USA'), findsOneWidget);
@@ -129,7 +129,7 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
+      await tester.pumpAndSettle(const Duration(seconds: 5));
 
       // Check if FlutterMap is rendered
       expect(find.byType(FlutterMap), findsOneWidget);
@@ -463,9 +463,6 @@ void main() {
           ),
         );
 
-        // Wait for widget to render
-        await tester.pump();
-
         // Find the left and right chevron buttons
         expect(find.byIcon(Icons.chevron_left), findsOneWidget);
         expect(find.byIcon(Icons.chevron_right), findsOneWidget);
@@ -505,9 +502,6 @@ void main() {
             ),
           ),
         );
-
-        // Wait for widget to render
-        await tester.pump();
 
         // Tap the left chevron button
         await tester.tap(find.byIcon(Icons.chevron_left));
@@ -551,9 +545,6 @@ void main() {
             ),
           ),
         );
-
-        // Wait for widget to render
-        await tester.pump();
 
         // Tap the right chevron button
         await tester.tap(find.byIcon(Icons.chevron_right));

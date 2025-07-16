@@ -37,8 +37,9 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
   );
   final PopupController _popupController = PopupController();
 
-  final tileOffest = 200.0;
-  final locationVisitFocusMargin = 100;
+  static const tileOffest = 200.0;
+  static const locationVisitFocusMargin = 100;
+  static const yearHeaderHeight = 50.0;
 
   late final Map<Location, List<LocationVisit>> _locationsMap = {};
 
@@ -153,6 +154,28 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
     });
   }
 
+  void navigateCarouselLeft() {
+    if (sortedVisits.isEmpty || !carouselController.hasClients) return;
+
+    final currentIndex = sortedVisits.indexOf(currentSelectedLocationVisit!);
+    if (currentIndex > 0) {
+      final previousVisit = sortedVisits[currentIndex - 1];
+      updateLocation(previousVisit);
+      animateCarouselTo(previousVisit);
+    }
+  }
+
+  void navigateCarouselRight() {
+    if (sortedVisits.isEmpty || !carouselController.hasClients) return;
+
+    final currentIndex = sortedVisits.indexOf(currentSelectedLocationVisit!);
+    if (currentIndex < sortedVisits.length - 1) {
+      final nextVisit = sortedVisits[currentIndex + 1];
+      updateLocation(nextVisit);
+      animateCarouselTo(nextVisit);
+    }
+  }
+
   Widget _buildPopupContent(Location location) {
     final dateFormat = DateFormat('MMM y');
     final visits = _locationsMap[location] ?? [];
@@ -264,29 +287,32 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
         Expanded(
           child: Align(
             alignment: Alignment.center,
-            child: Container(
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28.0),
-              ),
-              child: FlutterMap(
-                options: MapOptions(initialCenter: currentLocation.position, initialZoom: 5.0, onTap: (_, __) => _popupController.hideAllPopups()),
-                mapController: _controller.mapController,
-                children: [
-                  TileLayer(tileProvider: CancellableNetworkTileProvider(), urlTemplate: widget.mapsUrlTemplate, subdomains: const ['a', 'b', 'c']),
-                  PopupMarkerLayer(
-                    options: PopupMarkerLayerOptions(
-                      popupController: _popupController,
-                      markers: markers,
-                      popupDisplayOptions: PopupDisplayOptions(
-                        builder: (_, Marker marker) {
-                          final location = _locationsMap.keys.firstWhere((v) => ValueKey(v) == marker.key);
-                          return _buildPopupContent(location);
-                        },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 48),
+              child: Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28.0),
+                ),
+                child: FlutterMap(
+                  options: MapOptions(initialCenter: currentLocation.position, initialZoom: 5.0, onTap: (_, __) => _popupController.hideAllPopups()),
+                  mapController: _controller.mapController,
+                  children: [
+                    TileLayer(tileProvider: CancellableNetworkTileProvider(), urlTemplate: widget.mapsUrlTemplate, subdomains: const ['a', 'b', 'c']),
+                    PopupMarkerLayer(
+                      options: PopupMarkerLayerOptions(
+                        popupController: _popupController,
+                        markers: markers,
+                        popupDisplayOptions: PopupDisplayOptions(
+                          builder: (_, Marker marker) {
+                            final location = _locationsMap.keys.firstWhere((v) => ValueKey(v) == marker.key);
+                            return _buildPopupContent(location);
+                          },
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -295,49 +321,87 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
         SizedBox(
           child: ConstrainedBox(
             constraints: BoxConstraints(maxHeight: 150),
-            child: Listener(
-              onPointerSignal: (pointerSignal) {
-                if (pointerSignal is PointerScrollEvent) {
-                  // Get the current scroll position
-                  final currentOffset = carouselController.offset;
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Left chevron button
+                Padding(
+                  padding: const EdgeInsets.only(top: yearHeaderHeight),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      onPressed: navigateCarouselLeft,
+                      icon: Icon(Icons.chevron_left),
+                      iconSize: 32,
+                      style: IconButton.styleFrom(
+                        foregroundColor: widget.style?.markerColor ?? Colors.black,
+                      ),
+                    ),
+                  ),
+                ),
+                // Carousel
+                Expanded(
+                  child: Listener(
+                    onPointerSignal: (pointerSignal) {
+                      if (pointerSignal is PointerScrollEvent) {
+                        // Get the current scroll position
+                        final currentOffset = carouselController.offset;
 
-                  // Calculate scroll delta (adjust sensitivity as needed)
-                  final scrollDelta = pointerSignal.scrollDelta.dy * 2; // Multiply by 2 for better sensitivity
+                        // Calculate scroll delta (adjust sensitivity as needed)
+                        final scrollDelta = pointerSignal.scrollDelta.dy * 2; // Multiply by 2 for better sensitivity
 
-                  // Calculate new offset
-                  final newOffset = (currentOffset + scrollDelta).clamp(
-                    0.0,
-                    carouselController.position.maxScrollExtent,
-                  );
+                        // Calculate new offset
+                        final newOffset = (currentOffset + scrollDelta).clamp(
+                          0.0,
+                          carouselController.position.maxScrollExtent,
+                        );
 
-                  // Animate to new position
-                  carouselController.animateTo(
-                    newOffset,
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeOut,
-                  );
-                }
-              },
-              child: CarouselView(
-                itemExtent: tileOffest,
-                controller: carouselController,
-                onTap: null,
-                enableSplash: false,
-                shape: Border(),
-                children: sortedVisits.mapIndexed((index, visit) {
-                  String? yearHeader;
-                  if (index == 0) {
-                    yearHeader = visit.end?.year.toString() ?? visit.start.year.toString();
-                  } else {
-                    final previousYear = sortedVisits[index - 1].end?.year ?? sortedVisits[index - 1].start.year;
-                    final currentYear = visit.end?.year ?? visit.start.year;
-                    if (currentYear != previousYear) {
-                      yearHeader = currentYear.toString();
-                    }
-                  }
-                  return carouselBox(visit, visit == currentSelectedLocationVisit, yearHeader, dateFormat);
-                }).toList(),
-              ),
+                        // Animate to new position
+                        carouselController.animateTo(
+                          newOffset,
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeOut,
+                        );
+                      }
+                    },
+                    child: CarouselView(
+                      itemExtent: tileOffest,
+                      controller: carouselController,
+                      onTap: null,
+                      enableSplash: false,
+                      shape: Border(),
+                      children: sortedVisits.mapIndexed((index, visit) {
+                        String? yearHeader;
+                        if (index == 0) {
+                          yearHeader = visit.end?.year.toString() ?? visit.start.year.toString();
+                        } else {
+                          final previousYear = sortedVisits[index - 1].end?.year ?? sortedVisits[index - 1].start.year;
+                          final currentYear = visit.end?.year ?? visit.start.year;
+                          if (currentYear != previousYear) {
+                            yearHeader = currentYear.toString();
+                          }
+                        }
+                        return carouselBox(visit, visit == currentSelectedLocationVisit, yearHeader, dateFormat);
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                // Right chevron button
+                Padding(
+                  padding: const EdgeInsets.only(top: yearHeaderHeight),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: IconButton(
+                      onPressed: navigateCarouselRight,
+                      icon: Icon(Icons.chevron_right),
+                      iconSize: 32,
+                      style: IconButton.styleFrom(
+                        foregroundColor: widget.style?.markerColor ?? Colors.black,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -373,7 +437,7 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
     return Column(
       children: [
         SizedBox(
-          height: 50,
+          height: yearHeaderHeight,
           child: yearHeader == null
               ? const SizedBox.shrink()
               : Center(
