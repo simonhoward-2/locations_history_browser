@@ -176,6 +176,18 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
     }
   }
 
+  bool _canNavigateLeft() {
+    if (sortedVisits.isEmpty || currentSelectedLocationVisit == null) return false;
+    final currentIndex = sortedVisits.indexOf(currentSelectedLocationVisit!);
+    return currentIndex > 0;
+  }
+
+  bool _canNavigateRight() {
+    if (sortedVisits.isEmpty || currentSelectedLocationVisit == null) return false;
+    final currentIndex = sortedVisits.indexOf(currentSelectedLocationVisit!);
+    return currentIndex < sortedVisits.length - 1;
+  }
+
   Widget _buildPopupContent(Location location) {
     final dateFormat = DateFormat('MMM y');
     final visits = _locationsMap[location] ?? [];
@@ -330,11 +342,13 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: IconButton(
-                      onPressed: navigateCarouselLeft,
+                      onPressed: _canNavigateLeft() ? navigateCarouselLeft : null,
                       icon: Icon(Icons.chevron_left),
                       iconSize: 32,
                       style: IconButton.styleFrom(
-                        foregroundColor: widget.style?.markerColor ?? Colors.black,
+                        foregroundColor: _canNavigateLeft()
+                            ? (widget.style?.markerColor ?? Colors.black)
+                            : (widget.style?.markerColor ?? Colors.black).withValues(alpha: 0.3),
                       ),
                     ),
                   ),
@@ -392,11 +406,13 @@ class _LocationsHistoryBrowserState extends State<LocationsHistoryBrowser> with 
                   child: Align(
                     alignment: Alignment.centerRight,
                     child: IconButton(
-                      onPressed: navigateCarouselRight,
+                      onPressed: _canNavigateRight() ? navigateCarouselRight : null,
                       icon: Icon(Icons.chevron_right),
                       iconSize: 32,
                       style: IconButton.styleFrom(
-                        foregroundColor: widget.style?.markerColor ?? Colors.black,
+                        foregroundColor: _canNavigateRight()
+                            ? (widget.style?.markerColor ?? Colors.black)
+                            : (widget.style?.markerColor ?? Colors.black).withValues(alpha: 0.3),
                       ),
                     ),
                   ),
